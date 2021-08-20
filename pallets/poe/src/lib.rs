@@ -5,10 +5,15 @@
 /// https://substrate.dev/docs/en/knowledgebase/runtime/frame
 
 pub use pallet::*;
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
+
 
 #[frame_support::pallet]
 pub mod pallet {
-
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::*
@@ -20,6 +25,8 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 			/// Because this pallet emits events, it depends on the runtime's definition of an event.
 			type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+			#[pallet::constant]
+			type VecLimit: Get<u8>;
 	}
 
 	#[pallet::pallet]
@@ -51,7 +58,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		ProofAlreadyExist,
 		ClaimNotExisit,
-		NotClaimOwner
+		NotClaimOwner,
+		BadMetadata
 	}
 
 	#[pallet::hooks]
@@ -62,6 +70,7 @@ pub mod pallet {
 	impl<T:Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn create_claim(origin: OriginFor<T>, claim: Vec<u8>) -> DispatchResultWithPostInfo {
+			ensure!(claim.len() < T::VecLimit::get() as usize, Error::<T>::BadMetadata);
 			let sender = ensure_signed(origin)?;
 			ensure!(!Proofs::<T>::contains_key(&claim), Error::<T>::ProofAlreadyExist);
 			Proofs::<T>::insert(&claim, (sender.clone(), frame_system::Pallet::<T>::block_number()));
@@ -71,6 +80,7 @@ pub mod pallet {
 		
 		#[pallet::weight(0)]
 		pub fn revoke_claim(origin: OriginFor<T>, claim: Vec<u8>) -> DispatchResultWithPostInfo {
+			ensure!(claim.len() < T::VecLimit::get() as usize, Error::<T>::BadMetadata);
 			let sender = ensure_signed(origin)?;
 			let (owner, _) = Proofs::<T>::get(&claim).ok_or(Error::<T>::ClaimNotExisit)?;
 			ensure!(sender == owner, Error::<T>::NotClaimOwner);
@@ -81,6 +91,7 @@ pub mod pallet {
 
 		#[pallet::weight(0)]
 		pub fn transfer_claim(origin: OriginFor<T>, claim: Vec<u8>, reciever: T::AccountId) -> DispatchResultWithPostInfo {
+			ensure!(claim.len() < T::VecLimit::get() as usize, Error::<T>::BadMetadata);
 			let sender = ensure_signed(origin)?;
 			//let reciever = T::AccountId::decode(&mut dest.as_bytes()).unwrap_or_default();
 			let (owner, _) = Proofs::<T>::get(&claim).ok_or(Error::<T>::ClaimNotExisit)?;
